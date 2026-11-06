@@ -87,6 +87,12 @@ export default function Home() {
     persistDraft(newText);
   };
 
+  const handleImportText = (importedText: string) => {
+    setText(importedText);
+    persistDraft(importedText);
+    showToast('Archivo cargado', 'success');
+  };
+
   const handleAutoSave = async (textToSave: string) => {
     if (!textToSave.trim()) return;
 
@@ -171,7 +177,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] flex flex-col">
-      <Header onOpenHistory={() => setIsHistoryOpen(true)} />
+      <Header
+        onOpenHistory={() => setIsHistoryOpen(true)}
+        onImportText={handleImportText}
+        onImportError={(message) => showToast(message, 'warning')}
+      />
 
       <main className="flex-1 px-6 lg:px-8 py-8">
         <div className="max-w-7xl mx-auto h-full">
