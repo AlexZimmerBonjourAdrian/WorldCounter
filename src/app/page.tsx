@@ -15,8 +15,19 @@ import { TemplateService } from '@/business/services/TemplateService';
 import { ClipboardService } from '@/business/services/ClipboardService';
 import { CounterStats, SocialTemplate, StoredCounterText } from '@/data/CounterData';
 
+const DRAFT_KEY = 'worldcounter:draft';
+
+const getInitialDraft = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.localStorage.getItem(DRAFT_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
 export default function Home() {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(getInitialDraft);
   const [stats, setStats] = useState<CounterStats>({ wordCount: 0, charCount: 0, charCountNoSpaces: 0 });
   const [selectedTemplate, setSelectedTemplate] = useState<SocialTemplate | null>(null);
   const [savedTexts, setSavedTexts] = useState<StoredCounterText[]>([]);
@@ -27,13 +38,40 @@ export default function Home() {
   const templates = TemplateService.getTemplates();
 
   useEffect(() => {
-    loadHistory();
+    loadHistoryAndRestore();
   }, []);
 
   useEffect(() => {
     const newStats = TextAnalysisService.analyzeText(text);
     setStats(newStats);
   }, [text]);
+
+  const persistDraft = (value: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (value) {
+        window.localStorage.setItem(DRAFT_KEY, value);
+      } else {
+        window.localStorage.removeItem(DRAFT_KEY);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const loadHistoryAndRestore = async () => {
+    try {
+      const texts = await StorageService.listTexts();
+      setSavedTexts(texts);
+
+      // Restaurar el texto actual si no hay borrador sincrónico
+      if (!getInitialDraft() && texts.length > 0) {
+        setText(texts[0].text);
+      }
+    } catch (error) {
+      console.error('Error loading history:', error);
+    }
+  };
 
   const loadHistory = async () => {
     try {
@@ -46,11 +84,12 @@ export default function Home() {
 
   const handleTextChange = (newText: string) => {
     setText(newText);
+    persistDraft(newText);
   };
 
   const handleAutoSave = async (textToSave: string) => {
     if (!textToSave.trim()) return;
-    
+
     setIsSaving(true);
     try {
       await StorageService.saveText(textToSave);
@@ -76,6 +115,7 @@ export default function Home() {
     const loadedText = await StorageService.loadText(id);
     if (loadedText) {
       setText(loadedText.text);
+      persistDraft(loadedText.text);
       setIsHistoryOpen(false);
       showToast('Texto cargado', 'info');
     }
@@ -97,6 +137,7 @@ export default function Home() {
     await StorageService.purgeAllTexts();
     await loadHistory();
     setText('');
+    persistDraft('');
     showToast('Todos los textos purgados', 'success');
   };
 
@@ -104,6 +145,29 @@ export default function Home() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // Persistir el borrador ante cierre/restauración de la página
+  useEffect(() => {
+    const saveOnHide = () => {
+      persistDraft(text);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        persistDraft(text);
+      }
+    };
+
+    window.addEventListener('beforeunload', saveOnHide);
+    window.addEventListener('pagehide', saveOnHide);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', saveOnHide);
+      window.removeEventListener('pagehide', saveOnHide);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [text]);
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] flex flex-col">

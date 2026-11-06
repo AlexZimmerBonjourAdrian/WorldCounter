@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface CounterEditorProps {
   value: string;
@@ -10,9 +10,11 @@ interface CounterEditorProps {
 
 export default function CounterEditor({ value, onChange, onAutoSave }: CounterEditorProps) {
   const [localValue, setLocalValue] = useState(value);
+  const lastSavedRef = useRef(value);
 
   useEffect(() => {
     setLocalValue(value);
+    lastSavedRef.current = value;
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -24,13 +26,14 @@ export default function CounterEditor({ value, onChange, onAutoSave }: CounterEd
   // Autoguardado con debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (localValue !== value) {
+      if (localValue !== lastSavedRef.current) {
+        lastSavedRef.current = localValue;
         onAutoSave(localValue);
       }
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [localValue, value, onAutoSave]);
+  }, [localValue, onAutoSave]);
 
   return (
     <textarea
